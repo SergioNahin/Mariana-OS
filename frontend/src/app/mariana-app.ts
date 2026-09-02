@@ -1,11 +1,12 @@
 import { LitElement, html } from 'lit';
+import './app-shell.js';
 
 export class MarianaApp extends LitElement {
   protected override render() {
     return html`
-      <main>
+      <mariana-app-shell>
         <h1>Mariana OS</h1>
-      </main>
+      </mariana-app-shell>
     `;
   }
 }

@@ -1,3 +1,4 @@
+import './styles/global.css';
 import './app/mariana-app.js';
 
 const app = document.querySelector<HTMLDivElement>('#app');

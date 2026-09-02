@@ -2,12 +2,29 @@ import { LitElement, html } from 'lit';
 import '../components/system/boot-screen.js';
 
 export class AppShell extends LitElement {
+  private showBootScreen = true;
+
   protected override render() {
     return html`
       <div class="app-shell">
-        <mariana-boot-screen></mariana-boot-screen>
+        ${this.showBootScreen
+          ? html`
+              <mariana-boot-screen
+                @boot-complete=${this.handleBootComplete}
+              ></mariana-boot-screen>
+            `
+          : html`
+              <main>
+                <h1>Mariana OS</h1>
+              </main>
+            `}
       </div>
     `;
+  }
+
+  private handleBootComplete(): void {
+    this.showBootScreen = false;
+    this.requestUpdate();
   }
 }
 

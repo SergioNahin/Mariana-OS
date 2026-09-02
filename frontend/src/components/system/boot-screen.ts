@@ -56,7 +56,57 @@ export class BootScreen extends LitElement {
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.12);
     }
+
+    .boot-progress {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: #ffffff;
+      transition: width 150ms ease;
+    }
   `;
+
+  private progress = 0;
+  private bootTimer?: number;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.startBootSequence();
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+
+    if (this.bootTimer !== undefined) {
+      window.clearInterval(this.bootTimer);
+    }
+  }
+
+  private startBootSequence(): void {
+    this.progress = 0;
+
+    this.bootTimer = window.setInterval(() => {
+      this.progress += 10;
+
+      if (this.progress >= 100) {
+        this.progress = 100;
+
+        if (this.bootTimer !== undefined) {
+          window.clearInterval(this.bootTimer);
+          this.bootTimer = undefined;
+        }
+
+        this.dispatchEvent(
+          new CustomEvent('boot-complete', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
+
+      this.requestUpdate();
+    }, 150);
+  }
 
   protected override render() {
     return html`
@@ -66,16 +116,20 @@ export class BootScreen extends LitElement {
 
           <h1>Mariana OS</h1>
 
-          <p>Iniciando sistema...</p>
+          <p>
+            ${this.progress < 100 ? 'Iniciando sistema...' : 'Sistema listo'}
+          </p>
 
           <div
             class="boot-loader"
             role="progressbar"
-            aria-label="Iniciando Mariana OS"
+            aria-label="Progreso de inicio"
             aria-valuemin="0"
             aria-valuemax="100"
-            aria-valuenow="0"
-          ></div>
+            aria-valuenow=${this.progress}
+          >
+            <div class="boot-progress" style="width: ${this.progress}%"></div>
+          </div>
         </div>
       </section>
     `;

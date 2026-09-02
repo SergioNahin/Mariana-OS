@@ -1,5 +1,6 @@
 import { LitElement, html } from 'lit';
 import '../components/system/boot-screen.js';
+import '../components/desktop/os-desktop.js';
 
 export class AppShell extends LitElement {
   private showBootScreen = true;
@@ -13,11 +14,7 @@ export class AppShell extends LitElement {
                 @boot-complete=${this.handleBootComplete}
               ></mariana-boot-screen>
             `
-          : html`
-              <main>
-                <h1>Mariana OS</h1>
-              </main>
-            `}
+          : html` <mariana-desktop></mariana-desktop> `}
       </div>
     `;
   }

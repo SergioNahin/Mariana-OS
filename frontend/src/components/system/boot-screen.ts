@@ -95,6 +95,7 @@ export class BootScreen extends LitElement {
           window.clearInterval(this.bootTimer);
           this.bootTimer = undefined;
         }
+        console.log('BOOT SCREEN: dispatching boot-complete');
 
         this.dispatchEvent(
           new CustomEvent('boot-complete', {

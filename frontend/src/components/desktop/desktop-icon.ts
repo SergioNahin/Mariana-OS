@@ -19,12 +19,16 @@ export class DesktopIcon extends LitElement {
       flex-direction: column;
       align-items: center;
       gap: 0.5rem;
+
       padding: 0.75rem 0.5rem;
       box-sizing: border-box;
+
       border: 1px solid transparent;
       border-radius: 12px;
+
       background: transparent;
       color: #ffffff;
+
       cursor: pointer;
       font: inherit;
       text-align: center;
@@ -43,50 +47,62 @@ export class DesktopIcon extends LitElement {
     .icon {
       width: 52px;
       height: 52px;
+
       display: grid;
       place-items: center;
+
       border-radius: 14px;
+
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.12);
+
       font-size: 1.5rem;
     }
 
     .label {
       max-width: 100%;
+
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+
       font-size: 0.8rem;
     }
   `;
-
-  label = '';
-  icon = '○';
-  appId = '';
 
   private handleClick(): void {
     this.dispatchEvent(
       new CustomEvent('desktop-icon-open', {
         detail: {
-          appId: this.appId,
+          appId: this.getAttribute('appid') ?? '',
         },
         bubbles: true,
         composed: true,
-      })
+      }),
     );
   }
 
   protected override render() {
+    const label = this.getAttribute('label') ?? '';
+    const icon = this.getAttribute('icon') ?? '○';
+
     return html`
       <button
         class="desktop-icon"
         type="button"
-        aria-label=${`Abrir ${this.label}`}
+        aria-label=${`Abrir ${label}`}
         @click=${this.handleClick}
       >
-        <span class="icon" aria-hidden="true"> ${this.icon} </span>
+        <span
+          class="icon"
+          aria-hidden="true"
+        >
+          ${icon}
+        </span>
 
-        <span class="label"> ${this.label} </span>
+        <span class="label">
+          ${label}
+        </span>
       </button>
     `;
   }

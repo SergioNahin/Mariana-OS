@@ -15,6 +15,8 @@ export class OsDesktop extends LitElement {
       width: 100%;
       height: 100%;
       overflow: hidden;
+      box-sizing: border-box;
+
       background: #15151a;
       color: #ffffff;
     }
@@ -23,18 +25,16 @@ export class OsDesktop extends LitElement {
       width: 100%;
       height: 100%;
       box-sizing: border-box;
+
+      padding: 1rem;
       padding-bottom: 56px;
     }
 
-    .desktop-title {
-      margin: 0;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 2rem;
-      font-weight: 400;
-      opacity: 0.9;
+    .desktop-icons {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
     }
   `;
 

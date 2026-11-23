@@ -1,6 +1,16 @@
 import { LitElement, css, html } from 'lit';
+
 import './os-taskbar.js';
 import './desktop-icon.js';
+import '../windows/window-manager.js';
+
+/**
+ * Define el contrato público que OsDesktop
+ * necesita utilizar de WindowManager.
+ */
+interface WindowManagerElement extends HTMLElement {
+  openWindow(appId: string): void;
+}
 
 export class OsDesktop extends LitElement {
   static styles = css`
@@ -40,38 +50,72 @@ export class OsDesktop extends LitElement {
 
   protected override render() {
     return html`
-      <main class="desktop" aria-label="Escritorio de Mariana OS">
+      <main
+        class="desktop"
+        aria-label="Escritorio de Mariana OS"
+        @desktop-icon-open=${this.handleDesktopIconOpen}
+      >
         <div class="desktop-content">
           <div class="desktop-icons">
             <mariana-desktop-icon
               label="Memories"
               icon="♡"
-              appId="memories"
+              appid="memories"
             ></mariana-desktop-icon>
 
             <mariana-desktop-icon
               label="Timeline"
               icon="◷"
-              appId="timeline"
+              appid="timeline"
             ></mariana-desktop-icon>
 
             <mariana-desktop-icon
               label="Achievements"
               icon="★"
-              appId="achievements"
+              appid="achievements"
             ></mariana-desktop-icon>
 
             <mariana-desktop-icon
               label="Future"
               icon="◇"
-              appId="future"
+              appid="future"
             ></mariana-desktop-icon>
           </div>
         </div>
 
+        <mariana-window-manager></mariana-window-manager>
+
         <mariana-taskbar></mariana-taskbar>
       </main>
     `;
+  }
+
+  private handleDesktopIconOpen(event: Event): void {
+    const customEvent = event as CustomEvent<{
+      appId: string;
+    }>;
+
+    const appId = customEvent.detail?.appId;
+
+    console.log('[OsDesktop] Ícono seleccionado:', appId);
+
+    if (!appId) {
+      console.warn('[OsDesktop] No se recibió un appId');
+      return;
+    }
+
+    const windowManager = this.renderRoot.querySelector(
+      'mariana-window-manager'
+    ) as WindowManagerElement | null;
+
+    if (!windowManager) {
+      console.error('[OsDesktop] No se encontró WindowManager');
+      return;
+    }
+
+    console.log('[OsDesktop] Enviando solicitud a WindowManager:', appId);
+
+    windowManager.openWindow(appId);
   }
 }
 

@@ -3,17 +3,22 @@ import './window-titlebar.js';
 
 export class OsWindow extends LitElement {
   static properties = {
+    appId: { type: String },
     title: { type: String },
     icon: { type: String },
-    open: { type: Boolean },
-    minimized: { type: Boolean },
-    maximized: { type: Boolean },
-    focused: { type: Boolean },
+    open: { type: Boolean, reflect: true },
+    minimized: { type: Boolean, reflect: true },
+    maximized: { type: Boolean, reflect: true },
+    focused: { type: Boolean, reflect: true },
   };
 
   static styles = css`
     :host {
       position: absolute;
+
+      top: 80px;
+      left: 160px;
+
       display: block;
 
       width: 520px;
@@ -23,6 +28,23 @@ export class OsWindow extends LitElement {
       max-height: calc(100% - 2rem);
 
       color: #ffffff;
+
+      z-index: 20;
+    }
+
+    :host([minimized]) {
+      display: none;
+    }
+
+    :host([maximized]) {
+      top: 0;
+      left: 0;
+
+      width: 100%;
+      height: 100%;
+
+      max-width: none;
+      max-height: none;
     }
 
     .window {
@@ -34,65 +56,66 @@ export class OsWindow extends LitElement {
 
       overflow: hidden;
 
-      background: rgba(20, 20, 25, 0.96);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-sizing: border-box;
+
+      background: rgba(20, 20, 25, 0.98);
+
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
 
       box-shadow:
-        0 20px 60px rgba(0, 0, 0, 0.35),
-        0 4px 16px rgba(0, 0, 0, 0.2);
+        0 20px 60px rgba(0, 0, 0, 0.45),
+        0 4px 16px rgba(0, 0, 0, 0.25);
     }
 
     .window.focused {
-      border-color: rgba(255, 255, 255, 0.25);
+      border-color: rgba(255, 255, 255, 0.35);
     }
 
     .window.maximized {
-      width: 100vw;
-      height: 100vh;
-      max-width: none;
-      max-height: none;
-
       border-radius: 0;
     }
 
     .window-content {
       flex: 1;
+
       min-height: 0;
+
       overflow: auto;
+
       padding: 1.5rem;
+
+      box-sizing: border-box;
     }
 
-    .window-content[hidden] {
-      display: none;
+    .window-content h2 {
+      margin: 0 0 1rem;
+      font-size: 1.5rem;
+    }
+
+    .window-content p {
+      margin: 0 0 0.75rem;
+
+      color: rgba(255, 255, 255, 0.7);
     }
   `;
 
-  title = 'Mariana OS';
-  icon = '□';
-  open = true;
-  minimized = false;
-  maximized = false;
-  focused = false;
+  private handleMinimize(event: Event): void {
+    event.stopPropagation();
 
-  private handleMinimize(): void {
-    this.minimized = true;
-
-    this.dispatchEvent(
-      new CustomEvent('window-minimize', {
-        bubbles: true,
-        composed: true,
-      })
-    );
+    this.dispatchWindowEvent('window-minimize');
   }
 
-  private handleMaximize(): void {
-    this.maximized = !this.maximized;
+  private handleMaximize(event: Event): void {
+    event.stopPropagation();
+
+    const maximized = !this.hasAttribute('maximized');
 
     this.dispatchEvent(
       new CustomEvent('window-maximize', {
         detail: {
-          maximized: this.maximized,
+          appId: this.getAppId(),
+          maximized,
         },
         bubbles: true,
         composed: true,
@@ -100,49 +123,57 @@ export class OsWindow extends LitElement {
     );
   }
 
-  private handleClose(): void {
-    this.open = false;
+  private handleClose(event: Event): void {
+    event.stopPropagation();
 
-    this.dispatchEvent(
-      new CustomEvent('window-close', {
-        bubbles: true,
-        composed: true,
-      })
-    );
+    this.dispatchWindowEvent('window-close');
   }
 
   private handleFocus(): void {
+    this.dispatchWindowEvent('window-focus');
+  }
+
+  private dispatchWindowEvent(
+    eventName: 'window-minimize' | 'window-close' | 'window-focus'
+  ): void {
     this.dispatchEvent(
-      new CustomEvent('window-focus', {
+      new CustomEvent(eventName, {
+        detail: {
+          appId: this.getAppId(),
+        },
         bubbles: true,
         composed: true,
       })
     );
   }
 
+  private getAppId(): string {
+    return this.getAttribute('appid') ?? '';
+  }
+
   protected override render() {
-    if (!this.open) {
-      return html``;
-    }
+    const title = this.getAttribute('title') ?? 'Mariana OS';
+
+    const icon = this.getAttribute('icon') ?? '□';
+
+    const focused = this.hasAttribute('focused');
 
     return html`
       <section
-        class="window ${this.focused ? 'focused' : ''} ${this.maximized
-          ? 'maximized'
-          : ''}"
+        class="window ${focused ? 'focused' : ''}"
         role="dialog"
-        aria-label=${this.title}
+        aria-label=${title}
         @mousedown=${this.handleFocus}
       >
         <mariana-window-titlebar
-          title=${this.title}
-          icon=${this.icon}
+          title=${title}
+          icon=${icon}
           @window-minimize=${this.handleMinimize}
           @window-maximize=${this.handleMaximize}
           @window-close=${this.handleClose}
         ></mariana-window-titlebar>
 
-        <div class="window-content" ?hidden=${this.minimized}>
+        <div class="window-content">
           <slot></slot>
         </div>
       </section>

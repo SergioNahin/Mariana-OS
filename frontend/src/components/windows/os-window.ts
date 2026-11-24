@@ -38,6 +38,16 @@ export class OsWindow extends LitElement {
     :host([minimized]) {
       display: none;
     }
+    :host([maximized]) {
+      top: 0 !important;
+      left: 0 !important;
+
+      width: 100% !important;
+      height: 100% !important;
+
+      max-width: none;
+      max-height: none;
+    }
 
     .window {
       position: relative;

@@ -4,12 +4,18 @@ import { repeat } from 'lit/directives/repeat.js';
 import './os-window.js';
 import '../../modules/memories/memories-view.js';
 
+/**
+ * Configuración de una aplicación.
+ */
 interface WindowConfig {
   appId: string;
   title: string;
   icon: string;
 }
 
+/**
+ * Estado completo de una ventana.
+ */
 interface WindowState extends WindowConfig {
   minimized: boolean;
   maximized: boolean;
@@ -21,6 +27,17 @@ interface WindowState extends WindowConfig {
   zIndex: number;
 }
 
+/**
+ * Información pública compartida con Taskbar.
+ */
+interface TaskbarWindow {
+  appId: string;
+  title: string;
+  icon: string;
+  minimized: boolean;
+  focused: boolean;
+}
+
 interface WindowEventDetail {
   appId: string;
 }
@@ -28,6 +45,10 @@ interface WindowEventDetail {
 interface WindowPositionDetail extends WindowEventDetail {
   x: number;
   y: number;
+}
+
+interface MaximizeEventDetail extends WindowEventDetail {
+  maximized: boolean;
 }
 
 type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -38,14 +59,13 @@ interface ResizeEventDetail extends WindowEventDetail {
   deltaY: number;
 }
 
-interface MaximizeEventDetail extends WindowEventDetail {
-  maximized: boolean;
-}
-
 const MIN_WIDTH = 280;
 const MIN_HEIGHT = 200;
 const TASKBAR_HEIGHT = 56;
 
+/**
+ * Catálogo inicial de aplicaciones.
+ */
 const WINDOW_CONFIGS: Record<string, WindowConfig> = {
   memories: {
     appId: 'memories',
@@ -79,6 +99,9 @@ export class WindowManager extends LitElement {
       left: 0;
 
       display: block;
+      box-sizing: border-box;
+      overflow: hidden;
+
       z-index: 10;
       pointer-events: none;
     }
@@ -86,20 +109,30 @@ export class WindowManager extends LitElement {
     .windows {
       position: absolute;
       inset: 0;
+      overflow: hidden;
       pointer-events: none;
     }
 
     mariana-window {
       pointer-events: auto;
+      box-sizing: border-box;
     }
   `;
 
+  /**
+   * Estado privado.
+   *
+   * Usamos requestUpdate() explícitamente
+   * para evitar problemas de class-field
+   * shadowing con la configuración de TS.
+   */
   private windows: WindowState[] = [];
+
   private nextZIndex = 1;
 
   /**
-   * Observa el tamaño real del administrador,
-   * no solamente el tamaño del navegador.
+   * Observa cambios de tamaño en el área
+   * disponible para las ventanas.
    */
   private readonly resizeObserver = new ResizeObserver(() => {
     this.handleViewportResize();
@@ -107,18 +140,19 @@ export class WindowManager extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-
     this.resizeObserver.observe(this);
   }
 
   override disconnectedCallback(): void {
     this.resizeObserver.disconnect();
-
     super.disconnectedCallback();
   }
 
   /**
-   * Dibuja todas las ventanas registradas.
+   * Renderiza todas las ventanas.
+   *
+   * repeat() conserva la identidad de cada
+   * Web Component cuando cambia su estado.
    */
   protected override render() {
     return html`
@@ -160,8 +194,10 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Renderizado temporal de aplicaciones.
-   * Memories utiliza su propio Web Component.
+   * Renderizado de contenido por aplicación.
+   *
+   * Memories ya utiliza un Web Component
+   * independiente.
    */
   private renderApplication(window: WindowState) {
     switch (window.appId) {
@@ -180,7 +216,8 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Abre una aplicación o restaura su ventana.
+   * Abre una aplicación o restaura
+   * una ventana existente.
    */
   public openWindow(appId: string): void {
     const existing = this.windows.find(item => item.appId === appId);
@@ -230,7 +267,7 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Elimina una ventana del sistema.
+   * Cierra y elimina una ventana.
    */
   private handleClose(event: CustomEvent<WindowEventDetail>): void {
     event.stopPropagation();
@@ -243,7 +280,7 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Oculta una ventana sin eliminar su estado.
+   * Minimiza una ventana y conserva su estado.
    */
   private handleMinimize(event: CustomEvent<WindowEventDetail>): void {
     event.stopPropagation();
@@ -252,9 +289,7 @@ export class WindowManager extends LitElement {
 
     this.windows = this.windows.map(item => ({
       ...item,
-
       minimized: item.appId === appId ? true : item.minimized,
-
       focused: item.appId === appId ? false : item.focused,
     }));
 
@@ -262,8 +297,7 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Maximiza o restaura conservando las
-   * dimensiones y coordenadas anteriores.
+   * Maximiza o restaura una ventana.
    */
   private handleMaximize(event: CustomEvent<MaximizeEventDetail>): void {
     event.stopPropagation();
@@ -276,7 +310,6 @@ export class WindowManager extends LitElement {
 
     this.windows = this.windows.map(item => ({
       ...item,
-
       maximized: item.appId === appId ? maximized : item.maximized,
     }));
 
@@ -284,17 +317,15 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Enfoca una ventana al seleccionarla.
+   * Trae una ventana al frente.
    */
   private handleFocus(event: CustomEvent<WindowEventDetail>): void {
     event.stopPropagation();
-
     this.focusWindow(event.detail.appId);
   }
 
   /**
-   * Guarda la posición final después
-   * de arrastrar una ventana.
+   * Guarda la posición después de arrastrar.
    */
   private handlePositionChange(event: CustomEvent<WindowPositionDetail>): void {
     event.stopPropagation();
@@ -314,9 +345,7 @@ export class WindowManager extends LitElement {
 
       return {
         ...item,
-
         x: this.clamp(x, 0, bounds.width - item.width),
-
         y: this.clamp(y, 0, bounds.height - item.height),
       };
     });
@@ -325,8 +354,8 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Permite redimensionar desde
-   * los ocho bordes y esquinas.
+   * Redimensiona una ventana desde
+   * sus bordes o esquinas.
    */
   private handleResize(event: CustomEvent<ResizeEventDetail>): void {
     event.stopPropagation();
@@ -350,17 +379,14 @@ export class WindowManager extends LitElement {
 
       const minHeight = Math.min(MIN_HEIGHT, bounds.height);
 
-      // Redimensionar desde la derecha.
       if (edge.includes('e')) {
         width = this.clamp(width + deltaX, minWidth, bounds.width - x);
       }
 
-      // Redimensionar desde abajo.
       if (edge.includes('s')) {
         height = this.clamp(height + deltaY, minHeight, bounds.height - y);
       }
 
-      // Redimensionar desde la izquierda.
       if (edge.includes('w')) {
         const right = x + width;
 
@@ -369,7 +395,6 @@ export class WindowManager extends LitElement {
         width = right - x;
       }
 
-      // Redimensionar desde arriba.
       if (edge.includes('n')) {
         const bottom = y + height;
 
@@ -391,8 +416,8 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Corrige coordenadas y tamaños cuando
-   * cambia el área disponible del escritorio.
+   * Ajusta las ventanas cuando cambia
+   * el tamaño disponible del escritorio.
    */
   private handleViewportResize(): void {
     const bounds = this.getBounds();
@@ -433,7 +458,7 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Trae una ventana al frente.
+   * Actualiza foco y z-index.
    */
   private focusWindow(appId: string): void {
     const target = this.windows.find(item => item.appId === appId);
@@ -446,9 +471,7 @@ export class WindowManager extends LitElement {
 
     this.windows = this.windows.map(item => ({
       ...item,
-
       focused: item.appId === appId,
-
       zIndex: item.appId === appId ? zIndex : item.zIndex,
     }));
 
@@ -457,8 +480,8 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Busca la siguiente ventana visible
-   * después de cerrar o minimizar otra.
+   * Enfoca la siguiente ventana visible
+   * después de cerrar o minimizar.
    */
   private focusNextWindow(): void {
     const nextWindow = this.windows
@@ -480,20 +503,28 @@ export class WindowManager extends LitElement {
   }
 
   /**
-   * Sincroniza el estado de las ventanas
-   * con la barra de tareas.
+   * Retorna el estado público que consume
+   * la barra de tareas.
+   */
+  public getTaskbarWindows(): TaskbarWindow[] {
+    return this.windows.map(item => ({
+      appId: item.appId,
+      title: item.title,
+      icon: item.icon,
+      minimized: item.minimized,
+      focused: item.focused,
+    }));
+  }
+
+  /**
+   * Notifica los cambios a OsDesktop,
+   * que sincroniza la Taskbar.
    */
   private notifyTaskbar(): void {
     this.dispatchEvent(
       new CustomEvent('windows-change', {
         detail: {
-          windows: this.windows.map(item => ({
-            appId: item.appId,
-            title: item.title,
-            icon: item.icon,
-            minimized: item.minimized,
-            focused: item.focused,
-          })),
+          windows: this.getTaskbarWindows(),
         },
         bubbles: true,
         composed: true,
@@ -501,6 +532,9 @@ export class WindowManager extends LitElement {
     );
   }
 
+  /**
+   * Dimensiones disponibles para ventanas.
+   */
   private getBounds(): {
     width: number;
     height: number;
@@ -511,6 +545,9 @@ export class WindowManager extends LitElement {
     };
   }
 
+  /**
+   * Restringe un valor a un rango.
+   */
   private clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(value, Math.max(min, max)));
   }

@@ -1,15 +1,24 @@
 import { LitElement, css, html } from 'lit';
 
-import './os-taskbar.js';
 import './desktop-icon.js';
+import './os-taskbar.js';
 import '../windows/window-manager.js';
 
-/**
- * Define el contrato público que OsDesktop
- * necesita utilizar de WindowManager.
- */
+interface TaskbarWindow {
+  appId: string;
+  title: string;
+  icon: string;
+  minimized: boolean;
+  focused: boolean;
+}
+
 interface WindowManagerElement extends HTMLElement {
   openWindow(appId: string): void;
+  getTaskbarWindows(): TaskbarWindow[];
+}
+
+interface TaskbarElement extends HTMLElement {
+  setWindows(windows: TaskbarWindow[]): void;
 }
 
 export class OsDesktop extends LitElement {
@@ -34,10 +43,9 @@ export class OsDesktop extends LitElement {
     .desktop-content {
       width: 100%;
       height: 100%;
-      box-sizing: border-box;
-
       padding: 1rem;
       padding-bottom: 56px;
+      box-sizing: border-box;
     }
 
     .desktop-icons {
@@ -48,12 +56,18 @@ export class OsDesktop extends LitElement {
     }
   `;
 
+  protected override firstUpdated(): void {
+    this.syncTaskbar();
+  }
+
   protected override render() {
     return html`
       <main
         class="desktop"
         aria-label="Escritorio de Mariana OS"
         @desktop-icon-open=${this.handleDesktopIconOpen}
+        @taskbar-window-activate=${this.handleTaskbarActivate}
+        @windows-change=${this.handleWindowsChange}
       >
         <div class="desktop-content">
           <div class="desktop-icons">
@@ -84,10 +98,21 @@ export class OsDesktop extends LitElement {
         </div>
 
         <mariana-window-manager></mariana-window-manager>
-
         <mariana-taskbar></mariana-taskbar>
       </main>
     `;
+  }
+
+  private getWindowManager(): WindowManagerElement | null {
+    return this.renderRoot.querySelector(
+      'mariana-window-manager'
+    ) as WindowManagerElement | null;
+  }
+
+  private getTaskbar(): TaskbarElement | null {
+    return this.renderRoot.querySelector(
+      'mariana-taskbar'
+    ) as TaskbarElement | null;
   }
 
   private handleDesktopIconOpen(event: Event): void {
@@ -97,25 +122,68 @@ export class OsDesktop extends LitElement {
 
     const appId = customEvent.detail?.appId;
 
-    console.log('[OsDesktop] Ícono seleccionado:', appId);
+    if (!appId) {
+      return;
+    }
+
+    console.log('[OsDesktop] Abrir aplicación:', appId);
+
+    this.getWindowManager()?.openWindow(appId);
+  }
+
+  private handleTaskbarActivate(event: Event): void {
+    const customEvent = event as CustomEvent<{
+      appId: string;
+    }>;
+
+    const appId = customEvent.detail?.appId;
 
     if (!appId) {
-      console.warn('[OsDesktop] No se recibió un appId');
       return;
     }
 
-    const windowManager = this.renderRoot.querySelector(
-      'mariana-window-manager'
-    ) as WindowManagerElement | null;
+    console.log('[OsDesktop] Activar desde Taskbar:', appId);
 
-    if (!windowManager) {
-      console.error('[OsDesktop] No se encontró WindowManager');
+    this.getWindowManager()?.openWindow(appId);
+  }
+
+  private handleWindowsChange(event: Event): void {
+    const customEvent = event as CustomEvent<{
+      windows: TaskbarWindow[];
+    }>;
+
+    const windows = customEvent.detail?.windows;
+
+    if (!windows) {
+      console.warn('[OsDesktop] Evento windows-change sin datos');
       return;
     }
 
-    console.log('[OsDesktop] Enviando solicitud a WindowManager:', appId);
+    console.log('[OsDesktop] Ventanas para Taskbar:', windows);
 
-    windowManager.openWindow(appId);
+    const taskbar = this.getTaskbar();
+
+    if (!taskbar) {
+      console.warn('[OsDesktop] No se encontró mariana-taskbar');
+      return;
+    }
+
+    taskbar.setWindows(windows);
+  }
+
+  /**
+   * Sincroniza la Taskbar durante
+   * la inicialización del escritorio.
+   */
+  private syncTaskbar(): void {
+    const manager = this.getWindowManager();
+    const taskbar = this.getTaskbar();
+
+    if (!manager || !taskbar) {
+      return;
+    }
+
+    taskbar.setWindows(manager.getTaskbarWindows());
   }
 }
 

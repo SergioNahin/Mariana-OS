@@ -6,32 +6,29 @@ export class OsWindow extends LitElement {
     appId: { type: String },
     title: { type: String },
     icon: { type: String },
-    open: { type: Boolean, reflect: true },
-    minimized: { type: Boolean, reflect: true },
-    maximized: { type: Boolean, reflect: true },
-    focused: { type: Boolean, reflect: true },
+    open: { type: Boolean },
+    minimized: { type: Boolean },
+    maximized: { type: Boolean },
+    focused: { type: Boolean },
   };
 
   static styles = css`
     :host {
       position: absolute;
 
-      top: 80px;
-      left: 160px;
+      top: calc(48px + var(--window-offset, 0px));
+      left: min(calc(24px + var(--window-offset, 0px)), 15%);
 
       display: block;
 
-      width: 520px;
-      height: 360px;
-
-      max-width: calc(100% - 2rem);
-      max-height: calc(100% - 2rem);
+      width: min(520px, calc(100% - 72px));
+      height: min(360px, calc(100% - 64px));
 
       color: #ffffff;
-
-      z-index: 20;
+      box-sizing: border-box;
     }
 
+    :host(:not([open])),
     :host([minimized]) {
       display: none;
     }
@@ -48,55 +45,72 @@ export class OsWindow extends LitElement {
     }
 
     .window {
-      width: 100%;
-      height: 100%;
-
       display: flex;
       flex-direction: column;
 
-      overflow: hidden;
+      width: 100%;
+      height: 100%;
 
+      overflow: hidden;
       box-sizing: border-box;
 
       background: rgba(20, 20, 25, 0.98);
-
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
 
       box-shadow:
         0 20px 60px rgba(0, 0, 0, 0.45),
         0 4px 16px rgba(0, 0, 0, 0.25);
+
+      transition:
+        border-color 150ms ease,
+        box-shadow 150ms ease;
     }
 
-    .window.focused {
-      border-color: rgba(255, 255, 255, 0.35);
+    :host([focused]) .window {
+      border-color: rgba(255, 255, 255, 0.45);
+
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(255, 255, 255, 0.08);
     }
 
-    .window.maximized {
+    :host([maximized]) .window {
       border-radius: 0;
     }
 
     .window-content {
       flex: 1;
-
       min-height: 0;
 
       overflow: auto;
-
       padding: 1.5rem;
 
       box-sizing: border-box;
     }
 
-    .window-content h2 {
-      margin: 0 0 1rem;
-      font-size: 1.5rem;
+    ::slotted(*) {
+      color: inherit;
     }
 
-    .window-content p {
-      margin: 0 0 0.75rem;
+    @media (max-width: 640px) {
+      :host(:not([maximized])) {
+        top: 24px;
+        left: 12px;
 
-      color: rgba(255, 255, 255, 0.7);
+        width: calc(100% - 24px);
+        height: min(420px, calc(100% - 48px));
+      }
+
+      .window-content {
+        padding: 1rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .window {
+        transition: none;
+      }
     }
   `;
 
@@ -130,6 +144,10 @@ export class OsWindow extends LitElement {
   }
 
   private handleFocus(): void {
+    if (this.hasAttribute('focused')) {
+      return;
+    }
+
     this.dispatchWindowEvent('window-focus');
   }
 
@@ -156,14 +174,13 @@ export class OsWindow extends LitElement {
 
     const icon = this.getAttribute('icon') ?? '□';
 
-    const focused = this.hasAttribute('focused');
-
     return html`
       <section
-        class="window ${focused ? 'focused' : ''}"
+        class="window"
         role="dialog"
         aria-label=${title}
-        @mousedown=${this.handleFocus}
+        aria-modal="false"
+        @pointerdown=${this.handleFocus}
       >
         <mariana-window-titlebar
           title=${title}

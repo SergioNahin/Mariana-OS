@@ -21,7 +21,11 @@ export class WindowManager extends LitElement {
   static styles = css`
     :host {
       position: absolute;
-      inset: 0;
+      top: 0;
+      right: 0;
+      bottom: 56px;
+      left: 0;
+
       display: block;
       z-index: 10;
       pointer-events: none;
@@ -50,7 +54,7 @@ export class WindowManager extends LitElement {
         @window-focus=${this.handleWindowFocus}
       >
         ${this.windows.map(
-          window => html`
+          (window, index) => html`
             <mariana-window
               class="window-container"
               appid=${window.appId}
@@ -60,11 +64,16 @@ export class WindowManager extends LitElement {
               ?minimized=${window.minimized}
               ?maximized=${window.maximized}
               ?focused=${window.focused}
+              style=${`
+                z-index: ${index + 1};
+                --window-offset: ${Math.min(index, 5) * 24}px;
+              `}
             >
               <div>
                 <h2>${window.title}</h2>
-                <p>Esta es la primera ventana de Mariana OS.</p>
-                <p>Aplicación: ${window.appId}</p>
+                <p>Bienvenida a ${window.title}.</p>
+                <p>Primera versión del sistema de ventanas de Mariana OS.</p>
+                <p>App ID: ${window.appId}</p>
               </div>
             </mariana-window>
           `
@@ -74,19 +83,17 @@ export class WindowManager extends LitElement {
   }
 
   public openWindow(appId: string): void {
-    console.log('[WindowManager] openWindow:', appId);
-
     const existingWindow = this.windows.find(window => window.appId === appId);
 
     if (existingWindow) {
+      // Recuperar una ventana ya existente.
       this.windows = this.windows.map(window => ({
         ...window,
         open: window.appId === appId ? true : window.open,
         minimized: window.appId === appId ? false : window.minimized,
-        focused: window.appId === appId,
       }));
 
-      this.requestUpdate();
+      this.focusWindow(appId);
       return;
     }
 
@@ -97,23 +104,17 @@ export class WindowManager extends LitElement {
       return;
     }
 
-    this.windows = [
-      ...this.windows.map(window => ({
-        ...window,
-        focused: false,
-      })),
-      {
-        ...config,
-        open: true,
-        minimized: false,
-        maximized: false,
-        focused: true,
-      },
-    ];
+    const newWindow: WindowState = {
+      ...config,
+      open: true,
+      minimized: false,
+      maximized: false,
+      focused: false,
+    };
 
-    console.log('[WindowManager] Ventanas actuales:', this.windows);
+    this.windows = [...this.windows, newWindow];
 
-    this.requestUpdate();
+    this.focusWindow(appId);
   }
 
   private handleWindowClose(event: Event): void {
@@ -148,15 +149,16 @@ export class WindowManager extends LitElement {
 
     const { appId, maximized } = customEvent.detail ?? {};
 
-    if (!appId || maximized === undefined) return;
+    if (!appId || maximized === undefined) {
+      return;
+    }
 
     this.windows = this.windows.map(window => ({
       ...window,
       maximized: window.appId === appId ? maximized : window.maximized,
-      focused: window.appId === appId,
     }));
 
-    this.requestUpdate();
+    this.focusWindow(appId);
   }
 
   private handleWindowFocus(event: Event): void {
@@ -164,25 +166,57 @@ export class WindowManager extends LitElement {
 
     if (!appId) return;
 
-    this.windows = this.windows.map(window => ({
-      ...window,
-      focused: window.appId === appId,
-    }));
+    this.focusWindow(appId);
+  }
+
+  /**
+   * Coloca la ventana seleccionada al final
+   * del arreglo para mostrarla por encima.
+   */
+  private focusWindow(appId: string): void {
+    const selectedWindow = this.windows.find(window => window.appId === appId);
+
+    if (!selectedWindow) return;
+
+    const otherWindows = this.windows
+      .filter(window => window.appId !== appId)
+      .map(window => ({
+        ...window,
+        focused: false,
+      }));
+
+    this.windows = [
+      ...otherWindows,
+      {
+        ...selectedWindow,
+        focused: true,
+        minimized: false,
+        open: true,
+      },
+    ];
 
     this.requestUpdate();
   }
 
+  /**
+   * Enfoca la última ventana visible.
+   */
   private focusNextWindow(): void {
     const nextWindow = [...this.windows]
       .reverse()
       .find(window => window.open && !window.minimized);
 
-    this.windows = this.windows.map(window => ({
-      ...window,
-      focused: nextWindow !== undefined && window.appId === nextWindow.appId,
-    }));
+    if (!nextWindow) {
+      this.windows = this.windows.map(window => ({
+        ...window,
+        focused: false,
+      }));
 
-    this.requestUpdate();
+      this.requestUpdate();
+      return;
+    }
+
+    this.focusWindow(nextWindow.appId);
   }
 
   private getEventAppId(event: Event): string {

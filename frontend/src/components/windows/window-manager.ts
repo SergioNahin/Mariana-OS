@@ -1,15 +1,8 @@
 import { LitElement, css, html } from 'lit';
-import './os-window.js';
+import { repeat } from 'lit/directives/repeat.js';
 
-interface WindowState {
-  appId: string;
-  title: string;
-  icon: string;
-  open: boolean;
-  minimized: boolean;
-  maximized: boolean;
-  focused: boolean;
-}
+import './os-window.js';
+import '../../modules/memories/memories-view.js';
 
 interface WindowConfig {
   appId: string;
@@ -17,16 +10,70 @@ interface WindowConfig {
   icon: string;
 }
 
+interface WindowState extends WindowConfig {
+  minimized: boolean;
+  maximized: boolean;
+  focused: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex: number;
+}
+
+interface WindowEventDetail {
+  appId: string;
+}
+
+interface MoveEventDetail extends WindowEventDetail {
+  deltaX: number;
+  deltaY: number;
+}
+
+type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+interface ResizeEventDetail extends MoveEventDetail {
+  edge: ResizeEdge;
+}
+
+interface MaximizeEventDetail extends WindowEventDetail {
+  maximized: boolean;
+}
+
+const MIN_WIDTH = 280;
+const MIN_HEIGHT = 200;
+
+const WINDOW_CONFIGS: Record<string, WindowConfig> = {
+  memories: {
+    appId: 'memories',
+    title: 'Memories',
+    icon: '♡',
+  },
+  timeline: {
+    appId: 'timeline',
+    title: 'Timeline',
+    icon: '◷',
+  },
+  achievements: {
+    appId: 'achievements',
+    title: 'Achievements',
+    icon: '★',
+  },
+  future: {
+    appId: 'future',
+    title: 'Future',
+    icon: '◇',
+  },
+};
+
 export class WindowManager extends LitElement {
   static styles = css`
     :host {
       position: absolute;
-      top: 0;
-      right: 0;
-      bottom: 56px;
-      left: 0;
+      inset: 0 0 56px 0;
 
       display: block;
+
       z-index: 10;
       pointer-events: none;
     }
@@ -37,44 +84,78 @@ export class WindowManager extends LitElement {
       pointer-events: none;
     }
 
-    .window-container {
+    mariana-window {
       pointer-events: auto;
     }
   `;
 
   private windows: WindowState[] = [];
 
+  private nextZIndex = 1;
+
+  private readonly handleViewportResize = (): void => {
+    const bounds = this.getBounds();
+
+    this.windows = this.windows.map(window => {
+      const width = Math.min(window.width, bounds.width);
+      const height = Math.min(window.height, bounds.height);
+
+      return {
+        ...window,
+        width,
+        height,
+        x: this.clamp(window.x, 0, bounds.width - width),
+        y: this.clamp(window.y, 0, bounds.height - height),
+      };
+    });
+
+    this.requestUpdate();
+  };
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+
+    window.addEventListener('resize', this.handleViewportResize);
+  }
+
+  override disconnectedCallback(): void {
+    window.removeEventListener('resize', this.handleViewportResize);
+
+    super.disconnectedCallback();
+  }
+
   protected override render() {
     return html`
       <div
         class="windows"
-        @window-close=${this.handleWindowClose}
-        @window-minimize=${this.handleWindowMinimize}
-        @window-maximize=${this.handleWindowMaximize}
-        @window-focus=${this.handleWindowFocus}
+        @window-close=${this.handleClose}
+        @window-minimize=${this.handleMinimize}
+        @window-maximize=${this.handleMaximize}
+        @window-focus=${this.handleFocus}
+        @window-move=${this.handleMove}
+        @window-resize=${this.handleResize}
       >
-        ${this.windows.map(
-          (window, index) => html`
+        ${repeat(
+          this.windows,
+          window => window.appId,
+          window => html`
             <mariana-window
-              class="window-container"
               appid=${window.appId}
               title=${window.title}
               icon=${window.icon}
-              ?open=${window.open}
+              open
               ?minimized=${window.minimized}
               ?maximized=${window.maximized}
               ?focused=${window.focused}
               style=${`
-                z-index: ${index + 1};
-                --window-offset: ${Math.min(index, 5) * 24}px;
+                left: ${window.maximized ? 0 : window.x}px;
+                top: ${window.maximized ? 0 : window.y}px;
+                width: ${window.maximized ? '100%' : `${window.width}px`};
+                height: ${window.maximized ? '100%' : `${window.height}px`};
+                z-index: ${window.zIndex};
               `}
             >
-              <div>
-                <h2>${window.title}</h2>
-                <p>Bienvenida a ${window.title}.</p>
-                <p>Primera versión del sistema de ventanas de Mariana OS.</p>
-                <p>App ID: ${window.appId}</p>
-              </div>
+              ${this.renderApplication(window)}
             </mariana-window>
           `
         )}
@@ -82,34 +163,64 @@ export class WindowManager extends LitElement {
     `;
   }
 
-  public openWindow(appId: string): void {
-    const existingWindow = this.windows.find(window => window.appId === appId);
+  private renderApplication(window: WindowState) {
+    switch (window.appId) {
+      case 'memories':
+        return html` <mariana-memories-view></mariana-memories-view> `;
 
-    if (existingWindow) {
-      // Recuperar una ventana ya existente.
-      this.windows = this.windows.map(window => ({
-        ...window,
-        open: window.appId === appId ? true : window.open,
-        minimized: window.appId === appId ? false : window.minimized,
+      default:
+        return html`
+          <section>
+            <h2>${window.title}</h2>
+
+            <p>Esta aplicación se encuentra en desarrollo.</p>
+
+            <p>App ID: ${window.appId}</p>
+          </section>
+        `;
+    }
+  }
+
+  public openWindow(appId: string): void {
+    const existing = this.windows.find(item => item.appId === appId);
+
+    if (existing) {
+      this.windows = this.windows.map(item => ({
+        ...item,
+        minimized: item.appId === appId ? false : item.minimized,
       }));
 
       this.focusWindow(appId);
       return;
     }
 
-    const config = this.getWindowConfig(appId);
+    const config = WINDOW_CONFIGS[appId];
 
     if (!config) {
       console.warn('[WindowManager] Aplicación desconocida:', appId);
       return;
     }
 
+    const bounds = this.getBounds();
+
+    const width = Math.min(520, bounds.width);
+    const height = Math.min(360, bounds.height);
+
+    const offset = (this.windows.length % 6) * 28;
+
     const newWindow: WindowState = {
       ...config,
-      open: true,
       minimized: false,
       maximized: false,
       focused: false,
+
+      x: this.clamp(32 + offset, 0, bounds.width - width),
+
+      y: this.clamp(48 + offset, 0, bounds.height - height),
+
+      width,
+      height,
+      zIndex: 0,
     };
 
     this.windows = [...this.windows, newWindow];
@@ -117,141 +228,210 @@ export class WindowManager extends LitElement {
     this.focusWindow(appId);
   }
 
-  private handleWindowClose(event: Event): void {
-    const appId = this.getEventAppId(event);
+  private handleClose(event: CustomEvent<WindowEventDetail>): void {
+    event.stopPropagation();
 
-    if (!appId) return;
+    const { appId } = event.detail;
 
-    this.windows = this.windows.filter(window => window.appId !== appId);
+    this.windows = this.windows.filter(item => item.appId !== appId);
 
     this.focusNextWindow();
   }
 
-  private handleWindowMinimize(event: Event): void {
-    const appId = this.getEventAppId(event);
+  private handleMinimize(event: CustomEvent<WindowEventDetail>): void {
+    event.stopPropagation();
 
-    if (!appId) return;
+    const { appId } = event.detail;
 
-    this.windows = this.windows.map(window => ({
-      ...window,
-      minimized: window.appId === appId ? true : window.minimized,
-      focused: window.appId === appId ? false : window.focused,
+    this.windows = this.windows.map(item => ({
+      ...item,
+
+      minimized: item.appId === appId ? true : item.minimized,
+
+      focused: item.appId === appId ? false : item.focused,
     }));
 
     this.focusNextWindow();
   }
 
-  private handleWindowMaximize(event: Event): void {
-    const customEvent = event as CustomEvent<{
-      appId: string;
-      maximized: boolean;
-    }>;
+  private handleMaximize(event: CustomEvent<MaximizeEventDetail>): void {
+    event.stopPropagation();
 
-    const { appId, maximized } = customEvent.detail ?? {};
+    const { appId, maximized } = event.detail;
 
-    if (!appId || maximized === undefined) {
-      return;
-    }
+    this.windows = this.windows.map(item => ({
+      ...item,
 
-    this.windows = this.windows.map(window => ({
-      ...window,
-      maximized: window.appId === appId ? maximized : window.maximized,
+      maximized: item.appId === appId ? maximized : item.maximized,
     }));
 
     this.focusWindow(appId);
   }
 
-  private handleWindowFocus(event: Event): void {
-    const appId = this.getEventAppId(event);
+  private handleFocus(event: CustomEvent<WindowEventDetail>): void {
+    event.stopPropagation();
 
-    if (!appId) return;
-
-    this.focusWindow(appId);
+    this.focusWindow(event.detail.appId);
   }
 
-  /**
-   * Coloca la ventana seleccionada al final
-   * del arreglo para mostrarla por encima.
-   */
-  private focusWindow(appId: string): void {
-    const selectedWindow = this.windows.find(window => window.appId === appId);
+  private handleMove(event: CustomEvent<MoveEventDetail>): void {
+    event.stopPropagation();
 
-    if (!selectedWindow) return;
+    const { appId, deltaX, deltaY } = event.detail;
 
-    const otherWindows = this.windows
-      .filter(window => window.appId !== appId)
-      .map(window => ({
-        ...window,
-        focused: false,
-      }));
+    const bounds = this.getBounds();
 
-    this.windows = [
-      ...otherWindows,
-      {
-        ...selectedWindow,
-        focused: true,
-        minimized: false,
-        open: true,
-      },
-    ];
+    this.windows = this.windows.map(item => {
+      if (item.appId !== appId || item.maximized) {
+        return item;
+      }
+
+      return {
+        ...item,
+
+        x: this.clamp(
+          item.x + deltaX,
+          0,
+          Math.max(0, bounds.width - item.width)
+        ),
+
+        y: this.clamp(
+          item.y + deltaY,
+          0,
+          Math.max(0, bounds.height - item.height)
+        ),
+      };
+    });
 
     this.requestUpdate();
   }
 
-  /**
-   * Enfoca la última ventana visible.
-   */
-  private focusNextWindow(): void {
-    const nextWindow = [...this.windows]
-      .reverse()
-      .find(window => window.open && !window.minimized);
+  private handleResize(event: CustomEvent<ResizeEventDetail>): void {
+    event.stopPropagation();
 
-    if (!nextWindow) {
-      this.windows = this.windows.map(window => ({
-        ...window,
-        focused: false,
-      }));
+    const { appId, edge, deltaX, deltaY } = event.detail;
 
-      this.requestUpdate();
+    const bounds = this.getBounds();
+
+    this.windows = this.windows.map(item => {
+      if (item.appId !== appId || item.maximized) {
+        return item;
+      }
+
+      let { x, y, width, height } = item;
+
+      const minWidth = Math.min(MIN_WIDTH, bounds.width);
+
+      const minHeight = Math.min(MIN_HEIGHT, bounds.height);
+
+      if (edge.includes('e')) {
+        width = this.clamp(width + deltaX, minWidth, bounds.width - x);
+      }
+
+      if (edge.includes('s')) {
+        height = this.clamp(height + deltaY, minHeight, bounds.height - y);
+      }
+
+      if (edge.includes('w')) {
+        const right = x + width;
+
+        x = this.clamp(x + deltaX, 0, right - minWidth);
+
+        width = right - x;
+      }
+
+      if (edge.includes('n')) {
+        const bottom = y + height;
+
+        y = this.clamp(y + deltaY, 0, bottom - minHeight);
+
+        height = bottom - y;
+      }
+
+      return {
+        ...item,
+        x,
+        y,
+        width,
+        height,
+      };
+    });
+
+    this.requestUpdate();
+  }
+
+  private focusWindow(appId: string): void {
+    const target = this.windows.find(item => item.appId === appId);
+
+    if (!target) {
       return;
     }
 
-    this.focusWindow(nextWindow.appId);
+    const zIndex = ++this.nextZIndex;
+
+    this.windows = this.windows.map(item => ({
+      ...item,
+
+      focused: item.appId === appId,
+
+      zIndex: item.appId === appId ? zIndex : item.zIndex,
+    }));
+
+    this.requestUpdate();
+    this.notifyTaskbar();
   }
 
-  private getEventAppId(event: Event): string {
-    const customEvent = event as CustomEvent<{
-      appId: string;
-    }>;
+  private focusNextWindow(): void {
+    const nextWindow = this.windows
+      .filter(item => !item.minimized)
+      .sort((a, b) => b.zIndex - a.zIndex)[0];
 
-    return customEvent.detail?.appId ?? '';
+    if (nextWindow) {
+      this.focusWindow(nextWindow.appId);
+      return;
+    }
+
+    this.windows = this.windows.map(item => ({
+      ...item,
+      focused: false,
+    }));
+
+    this.requestUpdate();
+    this.notifyTaskbar();
   }
 
-  private getWindowConfig(appId: string): WindowConfig | undefined {
-    const configurations: Record<string, WindowConfig> = {
-      memories: {
-        appId: 'memories',
-        title: 'Memories',
-        icon: '♡',
-      },
-      timeline: {
-        appId: 'timeline',
-        title: 'Timeline',
-        icon: '◷',
-      },
-      achievements: {
-        appId: 'achievements',
-        title: 'Achievements',
-        icon: '★',
-      },
-      future: {
-        appId: 'future',
-        title: 'Future',
-        icon: '◇',
-      },
+  private notifyTaskbar(): void {
+    this.dispatchEvent(
+      new CustomEvent('windows-change', {
+        detail: {
+          windows: this.windows.map(item => ({
+            appId: item.appId,
+            title: item.title,
+            icon: item.icon,
+            minimized: item.minimized,
+            focused: item.focused,
+          })),
+        },
+
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private getBounds(): {
+    width: number;
+    height: number;
+  } {
+    return {
+      width: Math.max(1, this.clientWidth),
+
+      height: Math.max(1, this.clientHeight),
     };
+  }
 
-    return configurations[appId];
+  private clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(value, Math.max(min, max)));
   }
 }
 
